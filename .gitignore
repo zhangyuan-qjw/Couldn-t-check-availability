@@ -1,0 +1,68 @@
+# ============================================================
+# 部署助手（Deploy Tool）· .gitignore
+# 上传 GitHub 时忽略：构建产物 / 依赖环境 / 本地运行数据 / IDE 配置
+# 说明：源码（main.py、app/、tests/、build*.bat、部署助手.spec、icon.ico）
+#       和 win7build 下的小工具脚本（make_apiset_stub.py 等）都应保留在仓库里
+# ============================================================
+
+# ---------- Python 运行时 ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------- 虚拟环境 ----------
+.venv/
+venv/
+env/
+
+# ---------- PyInstaller 构建产物 ----------
+build/
+build_*/
+dist/
+dist_*/
+*.pdb
+*.dmp
+
+# ---------- Win7 专用构建环境（体积大、可重新生成，勿上传） ----------
+win7build/py38/
+win7build/pkg/
+win7build/spec/
+win7build/bld_*/
+win7build/vtmp/
+win7build/repodata.json.bz2
+
+# ---------- 本工具运行数据（配置文件 / 日志 / 备份 / 录制脚本） ----------
+configs/
+logs/
+backups/
+scripts/
+
+# ---------- 构建/测试临时文件 ----------
+build_log.txt
+*.log
+tmp/
+smoke_src/
+smoke_dst/
+
+# ---------- IDE / 编辑器 ----------
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 本地个人文件（如放进了安装包/截图等，按需再放开） ----------
+# *.exe
+# *.msi
+# *.zip
+# *.rar

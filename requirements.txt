@@ -1,0 +1,4 @@
+customtkinter>=5.2.2
+pywin32>=306
+pillow>=9.0.0
+py7zr>=0.20.0
