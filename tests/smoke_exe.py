@@ -50,7 +50,6 @@ def main():
             "tasks": {
                 "copy_archive": {"enabled": True, "source": src, "dest": dst,
                                  "overwrite": True, "backup": False},
-                "copy_file": {"enabled": False},
                 "shortcut": {"enabled": False},
                 "remove_autostart": {"enabled": False},
                 "driver_install": {"enabled": False},

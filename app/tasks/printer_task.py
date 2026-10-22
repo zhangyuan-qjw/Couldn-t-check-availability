@@ -143,20 +143,38 @@ def ensure_form(printer, name, width_mm, height_mm):
         win32print.ClosePrinter(h)
 
 
-def set_default_form(printer, name):
-    """把指定纸张模板设为该打印机的默认纸张"""
+def set_default_form(printer, name, width_mm=None, height_mm=None):
+    """把指定纸张模板设为该打印机的默认纸张（写入完整 DEVMODE 并读回校验）。
+
+    - PaperSize 设为 DMPAPER_USER，FormName 写自定义纸名；
+    - 同时写 PaperWidth/PaperLength（单位 0.1mm），部分驱动缺这两项会忽略自定义纸；
+    - 写完读回校验，便于日志/界面确认是否真的生效。
+    """
     import win32print
     import win32con
+    name = (name or "").strip()[:31]
+    if not name:
+        raise TaskError("纸张名称不能为空")
     h = _open(printer, admin=True)
     try:
         try:
             info = win32print.GetPrinter(h, 2)
         except Exception as e:
             raise TaskError(f"读取打印机设置失败：{util.error_hint(e)}")
-        dm = info["pDevMode"]
+        dm = info.get("pDevMode")
+        if dm is None:
+            raise TaskError("该打印机驱动不支持读取 DEVMODE（无法设置默认纸张），"
+                            "请改用「打印测试纸」验证纸张尺寸，或手动在打印机属性里选纸张。")
         dm.PaperSize = DMPAPER_USER
-        dm.FormName = name.strip()[:31]
-        dm.Fields = (dm.Fields or 0) | win32con.DM_PAPERSIZE | win32con.DM_FORMNAME
+        dm.FormName = name
+        fields = (dm.Fields or 0) | win32con.DM_PAPERSIZE | win32con.DM_FORMNAME
+        if width_mm:
+            dm.PaperWidth = int(round(float(width_mm) * 100))   # 0.1mm
+            fields |= win32con.DM_PAPERWIDTH
+        if height_mm:
+            dm.PaperLength = int(round(float(height_mm) * 100))  # 0.1mm
+            fields |= win32con.DM_PAPERLENGTH
+        dm.Fields = fields
         info["pDevMode"] = dm
         try:
             win32print.SetPrinter(h, 2, info, 0)
@@ -164,6 +182,27 @@ def set_default_form(printer, name):
             raise TaskError(f"设置默认纸张失败：{util.error_hint(e)}")
     finally:
         win32print.ClosePrinter(h)
+
+    # 读回校验（部分驱动会静默忽略，必须确认）
+    try:
+        h2 = _open(printer, admin=True)
+        try:
+            info2 = win32print.GetPrinter(h2, 2)
+        finally:
+            win32print.ClosePrinter(h2)
+        dm2 = info2.get("pDevMode")
+        ok = (dm2 is not None and int(dm2.PaperSize) == DMPAPER_USER
+              and (dm2.FormName or "").strip() == name)
+        if not ok:
+            log_hint = ("设置默认纸张后读回校验未通过：驱动可能未接受自定义纸张"
+                        "（当前纸张尺寸=%s，纸张名=%s）。"
+                        "将改为「打印测试页时强制使用自定义纸张」方式，"
+                        "若打印结果仍不对，请在打印机属性里手动选择该纸张。"
+                        % (getattr(dm2, "PaperSize", "?"), getattr(dm2, "FormName", "?")))
+            return "warn", log_hint
+        return "ok", ""
+    except Exception as e:
+        return "warn", f"默认纸张读回校验失败：{util.error_hint(e)}"
 
 
 def _set_default_printer(printer):
@@ -216,31 +255,105 @@ def _wait_drained(printer, timeout):
     return False
 
 
-def build_test_text(printer, form, width_mm, height_mm):
+def build_test_lines(printer, form, width_mm, height_mm):
+    """按纸张尺寸生成“刚好放得下”的测试内容。
+
+    避免驱动报“纸张小于行高，无法打印”：行数与每行字数都按纸张宽高换算，
+    小纸张（如 100x150 或更小）会自动减少内容/截断。
+    """
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return "\r\n".join([
-        "=" * 30,
-        "部署助手 · 打印机测试页",
-        f"打印机：{printer}",
-        f"纸张模板：{form}",
-        f"纸张尺寸：{width_mm} x {height_mm} mm",
-        f"打印时间：{now}",
-        "=" * 30,
-        "",
-        "如果您能看清以上内容，说明打印机与纸张设置正常。",
-        "",
-    ]) + "\f"
+    # 估算：8pt 中文约 2.2mm 宽、约 3.2mm 行高，留 15% 边距
+    max_chars = max(6, int(float(width_mm) * 0.90 / 2.2))
+    max_lines = max(3, int(float(height_mm) * 0.85 / 3.2))
+    raw = [
+        "部署助手测试页",
+        "打印机：" + str(printer),
+        "纸张：" + str(form),
+        "尺寸：%g x %g mm" % (width_mm, height_mm),
+        "时间：" + now,
+        "能看清即设置正常",
+    ]
+    lines = []
+    for text in raw:
+        while text:
+            lines.append(text[:max_chars])
+            text = text[max_chars:]
+    return lines[:max_lines]
 
 
-def print_test_page(printer, text, raw_mode=False, log=None):
+def build_test_text(printer, form, width_mm, height_mm):
+    return "\r\n".join(build_test_lines(printer, form, width_mm, height_mm)) + "\r\n"
+
+
+def _print_gdi(printer, form, width_mm, height_mm, lines, log):
+    """用自定义纸张的 DEVMODE 直接打印：强制按用户创建的纸张尺寸输出，
+    不受“打印机默认纸张没切过来”的影响。"""
+    import win32con
+    import win32gui
+    import win32print
+    import win32ui
+
+    h = _open(printer, admin=True)
+    try:
+        try:
+            info = win32print.GetPrinter(h, 2)
+        except Exception as e:
+            raise RuntimeError("读取打印机 DEVMODE 失败：%s" % util.error_hint(e))
+        dm = info.get("pDevMode")
+        if dm is None:
+            raise RuntimeError("打印机驱动不支持 DEVMODE")
+    finally:
+        win32print.ClosePrinter(h)
+
+    dm.PaperSize = DMPAPER_USER
+    dm.FormName = (str(form) or "")[:31]
+    dm.PaperWidth = int(round(float(width_mm) * 100))    # 0.1mm
+    dm.PaperLength = int(round(float(height_mm) * 100))  # 0.1mm
+    dm.Fields = (dm.Fields or 0) | win32con.DM_PAPERSIZE | win32con.DM_FORMNAME \
+        | win32con.DM_PAPERWIDTH | win32con.DM_PAPERLENGTH
+
+    hdc = win32gui.CreateDC("WINSPOOL", printer, dm)
+    if not hdc:
+        raise RuntimeError("无法创建打印机 DC")
+    try:
+        dc = win32ui.CreateDCFromHandle(hdc)
+        dpi_y = dc.GetDeviceCaps(win32con.LOGPIXELSY) or 96
+        dpi_x = dc.GetDeviceCaps(win32con.LOGPIXELSX) or 96
+        paper_h_px = max(1, int(round(float(height_mm) * dpi_y / 25.4)))
+        paper_w_px = max(1, int(round(float(width_mm) * dpi_x / 25.4)))
+        n = max(len(lines), 1)
+        line_h = max(8, paper_h_px // (n + 1))
+        font_h = max(6, min(line_h - 1, int(dpi_y * 9.0 / 72.0)))  # 最大约 9pt
+        font = win32ui.CreateFont({"name": "宋体", "height": -font_h, "weight": 400})
+        dc.StartDoc("部署助手测试页")
+        try:
+            dc.StartPage()
+            dc.SelectObject(font)
+            x = max(2, paper_w_px // 40)
+            y = max(2, paper_h_px // 60)
+            for line in lines:
+                dc.TextOut(x, y, line)
+                y += line_h
+            dc.EndPage()
+        finally:
+            dc.EndDoc()
+        log("按自定义纸张尺寸直接打印测试页（强制使用 %s）" % dm.FormName)
+    finally:
+        win32gui.DeleteDC(hdc)
+
+
+def print_test_page(printer, form, width_mm, height_mm, raw_mode=False, log=None):
     """打印测试页。
 
-    默认走“系统打印”：临时把目标打印机设为默认 -> 调用系统打印 -> 等待入队 ->
-    恢复原默认打印机。raw_mode 模式直接以 RAW 文本发送（适合部分标签机）。
+    优先用「自定义纸张 DEVMODE + GDI 直接打印」：即使驱动没把默认纸张切过来，
+    也会按用户创建的纸张尺寸输出；失败时回退到系统打印方式。
+    raw_mode 模式直接以 RAW 文本发送（适合部分标签机）。
     """
     import win32api
     import win32print
     log = log or (lambda m: None)
+    lines = build_test_lines(printer, form, width_mm, height_mm)
+    text = "\r\n".join(lines) + "\r\n"
 
     if raw_mode:
         h = _open(printer)
@@ -259,10 +372,23 @@ def print_test_page(printer, text, raw_mode=False, log=None):
             win32print.ClosePrinter(h)
         return
 
+    # 首选：GDI + 自定义纸张
+    try:
+        _print_gdi(printer, form, width_mm, height_mm, lines, log)
+        if _wait_jobs(printer, 15):
+            log("测试页已进入打印队列，等待打印完成…")
+            _wait_drained(printer, 60)
+            return
+        log("测试页已提交，但未在队列中看到任务（可能已打印完成）")
+        return
+    except Exception as e:
+        log(f"按自定义纸张打印失败，改用系统打印兜底：{util.error_hint(e)}")
+
+    # 兜底：系统打印（临时切默认打印机）
     tmp = tempfile.mkdtemp(prefix="deploy_test_")
     path = os.path.join(tmp, "部署助手测试页.txt")
     with open(path, "w", encoding="utf-8-sig") as f:
-        f.write(text.replace("\f", ""))
+        f.write(text)
     old_default = get_default_printer()
     try:
         try:
@@ -346,8 +472,11 @@ class PrinterTask(BaseTask):
         action = ensure_form(printer, form, width, height)
         log(f"纸张模板「{form}」{action}成功（{width:g} x {height:g} mm）")
         if cfg.get("set_default", True):
-            set_default_form(printer, form)
-            log(f"已将「{form}」设为打印机「{printer}」的默认纸张")
+            state, note = set_default_form(printer, form, width, height)
+            if state == "ok":
+                log(f"已将「{form}」设为打印机「{printer}」的默认纸张（已读回校验）")
+            else:
+                log(note, "warn")
         if cfg.get("test_print", False):
             log("开始打印测试纸…")
             self.print_test_now(cfg, log)
@@ -368,8 +497,8 @@ class PrinterTask(BaseTask):
             self._wait_printer(printer, log)
         else:
             log(f"打印机「{printer}」不在检测列表中：按手动输入的名称直接尝试…")
-        text = build_test_text(printer, form, width, height)
-        print_test_page(printer, text, raw_mode=bool(cfg.get("raw_mode", False)), log=log)
+        print_test_page(printer, form, width, height,
+                        raw_mode=bool(cfg.get("raw_mode", False)), log=log)
 
     # ---------------- 界面 ----------------
     def build_tab(self, tab, app):
@@ -381,9 +510,7 @@ class PrinterTask(BaseTask):
             "printer": StringVar(), "form": StringVar(),
             "w": StringVar(value="100"), "h": StringVar(value="150"),
         }
-        ui.hint(tab, "打印机可从下拉列表选择系统中的打印机，也可以直接手动输入打印机名称。"
-                     "执行时为所选打印机添加纸张模板并设为默认纸张；"
-                     "若同时启用驱动安装，本任务一定在驱动安装成功后执行，并自动等待打印机出现。").grid(
+        ui.hint(tab, "选择或输入打印机名称；执行时创建纸张模板并设为默认纸张。").grid(
             row=0, column=0, columnspan=5, padx=16, pady=(14, 4), sticky="w")
         ui.label(tab, "打印机（可选/可输入）").grid(row=1, column=0, padx=(16, 6), pady=8, sticky="w")
         self.menu = ctk.CTkComboBox(tab, values=["（未检测到打印机）"],
@@ -434,8 +561,7 @@ class PrinterTask(BaseTask):
         default = get_default_printer()
         if not default:
             self.def_label.configure(
-                text="当前系统默认打印机：无 ｜ 未检测到打印机：请确认打印机已连接并开机、"
-                     "驱动已安装（刚装好驱动可点「🔄 刷新」重试），或直接在输入框填写打印机名称。")
+                text="未检测到打印机：检查连接/驱动后点「🔄 刷新」，或手动输入名称。")
         else:
             self.def_label.configure(text=f"当前系统默认打印机：{default}")
 

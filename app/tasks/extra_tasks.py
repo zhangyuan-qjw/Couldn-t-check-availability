@@ -55,9 +55,8 @@ class QuickLaunchTask(BaseTask):
             "en": BooleanVar(value=False), "desktop": BooleanVar(value=True),
             "name": StringVar(),
         }
-        ui.hint(tab, "为“当前配置”生成一个快捷方式：双击它直接执行该配置，"
-                     "无需打开界面再点按钮。").grid(
-            row=0, column=0, columnspan=3, padx=16, pady=(16, 4), sticky="w")
+        ui.hint(tab, "生成快捷方式，双击直接执行当前配置。").grid(
+            row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky="w")
         ui.check(tab, self.v["en"], "启用此任务（生成一键运行快捷方式）").grid(
             row=1, column=0, columnspan=3, padx=(16, 6), pady=8, sticky="w")
         ui.label(tab, "快捷方式名称").grid(row=2, column=0, padx=(16, 6), pady=8, sticky="w")
@@ -65,8 +64,7 @@ class QuickLaunchTask(BaseTask):
             row=2, column=1, columnspan=2, padx=6, pady=8, sticky="ew")
         ui.check(tab, self.v["desktop"], "创建到桌面（取消勾选则创建到启动文件夹）").grid(
             row=3, column=0, columnspan=3, padx=(16, 6), pady=8, sticky="w")
-        ui.hint(tab, "提示：先保存配置再执行，快捷方式才能指向正确的配置；"
-                     "配置改名后需重新生成。").grid(
+        ui.hint(tab, "先保存配置再执行。").grid(
             row=4, column=0, columnspan=3, padx=16, pady=(2, 8), sticky="w")
 
     def load_ui(self, cfg):

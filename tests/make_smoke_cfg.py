@@ -13,7 +13,6 @@ def make(dst_config_dir, src, dest):
         "tasks": {
             "copy_archive": {"enabled": True, "source": src, "dest": dest,
                              "overwrite": True, "backup": False},
-            "copy_file": {"enabled": False},
             "shortcut": {"enabled": False},
             "remove_autostart": {"enabled": False},
             "driver_install": {"enabled": False},

@@ -70,15 +70,7 @@ def main():
     n, b = _fsutil.copy_dir_or_archive(zpath, dst, backup_dir=backup)
     check("压缩包解压复制", os.path.isfile(os.path.join(dst, "x", "y.txt")))
 
-    # 6. 单文件复制替换任务
-    ftask = [t for t in ts if t.key == "copy_file"][0]
-    filedst = os.path.join(tmp, "filedst")
-    fcfg = {"enabled": True, "source": os.path.join(src, "a.txt"),
-            "dest_folder": filedst, "backup": True}
-    ftask.run(fcfg, lambda m, l="info": None)
-    check("单文件复制", os.path.isfile(os.path.join(filedst, "a.txt")))
-
-    # 7. 快捷方式创建（.lnk）
+    # 6. 快捷方式创建（.lnk）
     lnk = os.path.join(tmp, "测试.lnk")
     try:
         make_lnk(sys.executable, lnk, args="-V", desc="smoke")

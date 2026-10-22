@@ -6,7 +6,7 @@
 2. 在本文件加一行 import；
 3. 重新打包。
 """
-from . import copy_task        # 复制文件夹/压缩包、复制替换文件
+from . import copy_task        # 复制文件（文件夹 / 压缩包，可先复制再解压）
 from . import driver_task      # 驱动一键安装（静默安装 + 自动点击向导 + 脚本回放）
 from . import shortcut_task    # 桌面快捷方式 + 开机自启（多程序）
 from . import printer_task     # 打印机纸张模板 + 默认纸张 + 测试打印

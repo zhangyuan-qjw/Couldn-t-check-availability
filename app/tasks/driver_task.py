@@ -512,8 +512,7 @@ class DriverInstallTask(BaseTask):
             "args": StringVar(), "timeout": StringVar(value=str(DEFAULT_TIMEOUT)),
             "verify": StringVar(),
         }
-        ui.hint(tab, "自动点击安装向导：开始/继续/下一步/安装/完成，勾选同意协议，"
-                     "自动填安装目录，并等待安装完成后才继续。").grid(
+        ui.hint(tab, "自动点击安装向导。").grid(
             row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky="w")
         ui.check(tab, self.v["en"], "启用此任务（部署时自动安装）").grid(
             row=1, column=0, columnspan=3, padx=(16, 6), pady=6, sticky="w")
@@ -531,7 +530,7 @@ class DriverInstallTask(BaseTask):
             row=3, column=1, columnspan=2, padx=6, pady=6, sticky="ew")
 
         ui.check(tab, self.v["auto"],
-                 "自动点击安装向导（推荐；中英文界面均支持，绝不点「取消」）").grid(
+                 "自动点击安装向导").grid(
             row=4, column=0, columnspan=3, padx=(16, 6), pady=6, sticky="w")
 
         # 录制脚本状态提示（执行时自动回放）
@@ -558,7 +557,7 @@ class DriverInstallTask(BaseTask):
         ui.label(self.adv, "超时（秒）").grid(row=2, column=0, padx=(16, 6), pady=4, sticky="w")
         ui.entry(self.adv, self.v["timeout"], placeholder=str(DEFAULT_TIMEOUT)).grid(
             row=2, column=1, padx=6, pady=4, sticky="w")
-        ui.hint(self.adv, "向导无进展多少秒后判定超时（不是安装总时长）").grid(
+        ui.hint(self.adv, "无进展多少秒后判定超时。").grid(
             row=2, column=2, padx=6, pady=4, sticky="w")
         ui.label(self.adv, "完成校验（可选）").grid(row=3, column=0, padx=(16, 6), pady=4, sticky="w")
         ui.entry(self.adv, self.v["verify"], placeholder="安装结束后必须存在的文件/文件夹，留空不校验").grid(
@@ -567,8 +566,7 @@ class DriverInstallTask(BaseTask):
             self.v["verify"], "选择校验目标", [("所有文件", "*.*")])).grid(
             row=3, column=2, padx=(6, 16), pady=4)
 
-        ui.hint(tab, "提示：安装一般需要管理员权限，请右键以管理员身份运行本工具；"
-                     "MSI 安装包自动用 msiexec /qn 静默安装。").grid(
+        ui.hint(tab, "安装需要管理员权限：请右键以管理员身份运行。").grid(
             row=7, column=0, columnspan=3, padx=16, pady=(4, 10), sticky="w")
 
         # 安装程序变化时刷新“已有录制脚本”提示
@@ -584,11 +582,9 @@ class DriverInstallTask(BaseTask):
             if scripts:
                 name = _recorder.script_summary(scripts[0])[0]
                 self.script_hint.configure(
-                    text="✅ 已有 %s 个录制脚本（执行时将自动回放最新的「%s」），"
-                         "脚本管理见「操作录制」标签页。" % (len(scripts), name))
+                    text="✅ 已有 %s 个录制脚本，执行时自动回放「%s」。" % (len(scripts), name))
                 return
-        self.script_hint.configure(
-            text="尚无录制脚本：将使用通用自动点击。也可到「操作录制」标签页录制保存。")
+        self.script_hint.configure(text="无录制脚本：使用通用自动点击。")
 
     def _toggle_adv(self):
         if self.adv.winfo_ismapped():

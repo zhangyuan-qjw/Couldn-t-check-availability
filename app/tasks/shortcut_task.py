@@ -164,8 +164,8 @@ class ShortcutTask(BaseTask):
         self.cur = 0
         self.item_buttons = []
 
-        ui.hint(tab, "可添加多个程序：每个程序分别设置桌面快捷方式与开机自启（开机自动运行）。").grid(
-            row=0, column=0, columnspan=3, padx=16, pady=(16, 4), sticky="w")
+        ui.hint(tab, "每个程序可分别设置桌面快捷方式与开机自启。").grid(
+            row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky="w")
 
         # 左侧：程序列表
         left = ctk.CTkFrame(tab)
@@ -214,8 +214,7 @@ class ShortcutTask(BaseTask):
         self.mode_menu = ctk.CTkOptionMenu(right, values=list(AUTOSTART_MODES.values()),
                                            variable=self.v["mode"], width=290)
         self.mode_menu.grid(row=6, column=1, columnspan=2, padx=6, pady=6, sticky="w")
-        ui.hint(right, "提示：Win+R 输入 shell:startup 可查看“启动文件夹”；"
-                       "注册表项位于 HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run。").grid(
+        ui.hint(right, "启动文件夹：Win+R 输入 shell:startup；注册表：HKCU\\...\\Run。").grid(
             row=7, column=0, columnspan=3, padx=12, pady=(2, 4), sticky="w")
 
         ui.check(tab, self.v["en"], "启用此任务").grid(

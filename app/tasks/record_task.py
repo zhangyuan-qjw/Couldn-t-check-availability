@@ -90,8 +90,7 @@ class RecordReplayTask(BaseTask):
         self.rec = None
         self._selected = set()   # 勾选“开始执行时回放”的脚本路径
 
-        ui.hint(tab, "把任意安装/卸载/配置程序的手动操作录制成脚本；"
-                     "勾选的脚本会在点「开始执行」时自动回放（勾选状态保存进配置文件）。").grid(
+        ui.hint(tab, "录制手动操作；勾选的脚本在「开始执行」时自动回放。").grid(
             row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky="w")
 
         # 目标程序（仅录制时使用；回放会自动定位脚本对应的程序）
